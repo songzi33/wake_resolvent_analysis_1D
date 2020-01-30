@@ -18,8 +18,9 @@ function [H] = pipeBC(LHS,RHS,N,r,m)
 
 %% Boundary condition at r = 0
 if m == 1 
-    % Boundary condition for m = 1
-
+    % Boundary condition for m = 1 
+    disp('BC for m = 1');
+    
     index_m1 = [1 3*N+1];
     LHS(index_m1,:) = 0;  %ux=p=0 at r=0
     RHS(index_m1,:) = 0;
@@ -37,6 +38,7 @@ if m == 1
 
 elseif m > 1
 
+    disp('BC for m >1');
     % Boundary condition at axis for |m| > 1
     % Set rows [1,N+1,2*N+1, 3*N+1] in LHS = 0.  To be modified below to reflect BC
     LHS(1:N:4*N,:) = 0;

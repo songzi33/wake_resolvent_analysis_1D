@@ -40,21 +40,18 @@ close all;
 load(filename, 'w_mean_th_time');
 W = w_mean_th_time;
 
-% load('top_hat_ujet.mat'); %#ok<*LOAD>
-
-% rc = r';
-% W = top_hat_ujet';
 %% Read the grid file 
 
-fid = fopen('./x1_grid.in');  %% Reading the radial grid
+fid = fopen('/home/sheel/Work/projects/spod_re5e4/grid/frinf/x1_grid.in');  %% Reading the radial grid
 
 D = cell2mat(textscan(fid, '%f%f', 'headerlines', 1));
 
-rgrid = D(1:end-9,2);
+r = D(1:end-9,2);
 
-for i = 1:size(rgrid,1)-2
-    rc(i,1) = 0.5*(rgrid(i+1,1) + rgrid(i,1));  %#ok<*AGROW> % Centered the grid faces to grid centers
+for i = 1:size(r,1)-2
+    rc(i,1) = 0.5*(r(i+1,1) + r(i,1));  %#ok<*AGROW> % Centered the grid faces to grid centers
 end
+
 %% Coordinate system based on Chebyshev collocation
 [r,dr,D1E,D1O,D2E,D2O] = pipeCoords(n,N,rc2,rmax);
 % r: radial coordinate (0,1] stretched using formulation in Lesshaft and
@@ -115,67 +112,42 @@ H = pipeBC(LHS,RHS,N,r,n);
 %     end
 % end
 
-
-%% Get resolvent trapezoidal quadrature weights
-
-nothetar = length(r);
-weight_thetar = zeros(N,1);
-weight_thetar(1) = pi*( r(1) + (r(2)-r(1))/2)^2 - pi*(r(1))^2;
-
-for i=2:nothetar-1
-        weight_thetar(i) = pi*( r(i) + (r(i+1)-r(i))/2 )^2 - pi*( r(i) - (r(i)-r(i-1))/2 )^2;
-end
-
-weight_thetar(nothetar) = pi*r(end)^2 - pi*( r(end) - (r(end)-r(end-1))/2 )^2;
-
 %% Scale Resolvent
 % Currently, the resolvent is scaled to yield unit L2 norm for the singular
 % forcing and response modes.  Alternative norms may be considered.
-
-
-b =  10^-20;
-
-tanh_weight = 0.5*(1-b)*(1+tanh(Ld-r))+b;     % Check Noguiera et al. 2019
-
-IWf  = sqrtm(diag(weight_thetar));            % Forcing weights
-iIW  = eye(length(r))/IWf;
+b =  10;
+tanh_weight = 0.5*(1-b)*(1+tanh(Ld -r))+b;     % Check Noguiera et al. 2019
+tanh_weight = ones(size(r,1),1);
+IW   = sqrtm(diag(tanh_weight.*r.*dr));
+iIW  = eye(length(r))/IW;
 Z = zeros(length(r));
+sqW  = [ IW Z Z Z; Z  IW Z Z; Z Z  IW Z; Z Z Z Z];
 isqW = [iIW Z Z Z; Z iIW Z Z; Z Z iIW Z; Z Z Z Z];
-
-IWr   = sqrtm(diag(tanh_weight.*weight_thetar));  % Response weights
-sqW  = [ IWr Z Z Z; Z  IWr Z Z; Z Z IWr Z; Z Z Z Z];
 
 % Weighted resolvent
 HW = sqW*H*isqW;
 
 %% Singular value decomposition
-[suW, ssW, svW] = svds(HW,nsvd,'largest','MaxIterations',1000); 
-
-iIW  = eye(length(r))/IWr;                   % Response weights
-isqW = [iIW Z Z Z; Z iIW Z Z; Z Z iIW Z; Z Z Z Z];
+[suW, ssW, svW] = svds(HW,nsvd,'largest','MaxIterations',400); 
 su = isqW*suW; 
-
-iIW  = eye(length(r))/IWf;                   % Forcing weights
-isqW = [iIW Z Z Z; Z iIW Z Z; Z Z iIW Z; Z Z Z Z];
 sv = isqW*svW;
-
 ss = diag(ssW);
 % ss: singular values
 % su: singular response (velocity) modes
 % sv: singular forcing modes
 
 % set phase of first non-zero point based on critical layer
-% if(om/k < 1)
-%     ind = find((U0/max(U0))>(om/k),1,'first');
-% else
-%     ind = N;
-% end
-% phase_shift = -1i*angle(su(ind,:));
-% sv = sv*diag(exp(phase_shift));
+if(om/k < 1)
+    ind = find((U0/max(U0))>(om/k),1,'first');
+else
+    ind = N;
+end
+phase_shift = -1i*angle(su(ind,:));
+sv = sv*diag(exp(phase_shift));
 
 % Because of the l2 norm used to scale the resolvent, we do not have any
 % pressure data.  Calculate pressure modes using the un-scaled resolvent.
-% su = H*sv;
-% su = su*diag(1./ss);
+su = H*sv;
+su = su*diag(1./ss);
 
 end
